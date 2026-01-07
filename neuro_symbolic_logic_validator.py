@@ -336,7 +336,7 @@ def main():
 
     user_query = st.text_area(
         "Enter your logical statement or question:",
-        placeholder="Example: If all humans are mortal, and Socrates is a human, what can we conclude about Socrates?",
+        placeholder="Example: If all mathematicians are genius, and Dr. Maharani is a mathematician, what can we conclude about Dr. Maharani?",
         height=120,
         help="Enter a logical reasoning question with clear premises and a conclusion"
     )
