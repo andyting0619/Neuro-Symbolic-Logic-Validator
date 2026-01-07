@@ -17,8 +17,8 @@ st.markdown("<h1 style='text-align: center;'>🧠 Neuro-Symbolic Logic Validator
 st.markdown("<p style='text-align: center; color: #888;'><strong>Developed by Andy Ting Zhi Wei</strong></p>",
             unsafe_allow_html=True)
 st.markdown("""
-This application validates the logical inference of AI responses using formal propositional logic.
-It extracts logical statements and validates them using both formal verification and heuristic analysis.
+This application validates the logical inference of AI-generated responses using propositional logic.
+It extracts logical statements and validates them using both logical verification and heuristic analysis.
 """)
 
 if GROQ_API_KEY == "your_api_key_here" or not GROQ_API_KEY:
@@ -178,7 +178,7 @@ def formal_logical_validation(logic_structure: Dict) -> Tuple[bool, str, str, st
 
 **Step 1: Premise Consistency Check**
 
-The formal verifier detected that the premises themselves are contradictory (UNSATISFIABLE).
+The logic verifier detected that the premises themselves are contradictory (UNSATISFIABLE).
 
 **Result:** (P₁ ∧ P₂ ∧ ... ∧ Pₙ) is UNSATISFIABLE
 
@@ -208,11 +208,11 @@ Premises are consistent (satisfiable) ✓
 
 **Step 2: Validity Check**
 
-The formal verifier confirmed that (P₁ ∧ P₂ ∧ ... ∧ Pₙ ∧ ¬C) is UNSATISFIABLE
+The logic verifier confirmed that (P₁ ∧ P₂ ∧ ... ∧ Pₙ ∧ ¬C) is UNSATISFIABLE
 
 **Interpretation:** It is impossible for all premises to be true while the conclusion is false. The conclusion necessarily follows from the premises through logical entailment.
 
-**Formal Proof:** Given the premises are true, the conclusion MUST be true."""
+**Logical Proof:** Given the premises are true, the conclusion MUST be true."""
 
         elif result == sat:
             model = solver.model()
@@ -236,7 +236,7 @@ Premises are consistent (satisfiable) ✓
 
 **Step 2: Validity Check**
 
-The formal verifier found that (P₁ ∧ P₂ ∧ ... ∧ Pₙ ∧ ¬C) is SATISFIABLE
+The logic verifier found that (P₁ ∧ P₂ ∧ ... ∧ Pₙ ∧ ¬C) is SATISFIABLE
 
 **Counterexample:** {counterexample_str}
 
@@ -255,7 +255,7 @@ Premises appear consistent ✓
 
 **Step 2: Validity Check**
 
-The formal verifier returned UNKNOWN status
+The logic verifier returned UNKNOWN status
 
 **Possible Reasons:**
 - Very complex logical structure
@@ -267,7 +267,7 @@ The formal verifier returned UNKNOWN status
         return validity, sat_status, result_str, explanation, False
 
     except Exception as e:
-        return None, "error", "error", f"Formal validation error: {str(e)}", False
+        return None, "error", "error", f"Logic validation error: {str(e)}", False
 
 
 def heuristic_validation(logic_structure: Dict) -> Tuple[bool, str, int]:
@@ -450,7 +450,7 @@ Use explicit logical language with connectives: and, or, not, if-then, therefore
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.subheader("🔷 Formal Verification")
+                    st.subheader("🔷 Logical Verification")
 
                     if is_contradiction:
                         st.error(f"❌ PREMISES CONTRADICTION (Vacuously Valid)")
