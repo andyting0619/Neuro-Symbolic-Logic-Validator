@@ -4,6 +4,7 @@
 - https://neuro-symbolic-logic-validator.streamlit.app
 # Requirement
 - Python 3.10
+- Groq API Key
 # How to Use
 1. Download and extract the files.
 2. Run the command prompt as an administrator.
