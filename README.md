@@ -1,7 +1,7 @@
 # Neuro-Symbolic Logic Validator
 - A simple web application for neuro-symbolic logic validator using Groq API.
 # The Link to the Demo Web Application
-
+- https://neuro-symbolic-logic-validator.streamlit.app
 # Requirement
 - Python 3.10
 # How to Use
