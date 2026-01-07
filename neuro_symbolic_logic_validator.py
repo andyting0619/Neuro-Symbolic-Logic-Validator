@@ -488,13 +488,13 @@ Use explicit logical language with connectives: and, or, not, if-then, therefore
 
                 with summary_cols[0]:
                     if is_contradiction:
-                        st.metric("Logic Consistency", "NO", delta="⚠",
+                        st.metric("Logically Consistent", "NO", delta="⚠",
                                   delta_color="inverse")
                     elif sat_status in ["unsat", "sat"]:
-                        st.metric("Logic Consistency", "YES",
+                        st.metric("Logically Consistent", "YES",
                                   delta="✓", delta_color="normal")
                     else:
-                        st.metric("Logic Consistency", "N/A",
+                        st.metric("Logically Consistent", "N/A",
                                   delta="?", delta_color="off")
 
                 with summary_cols[1]:
@@ -503,13 +503,13 @@ Use explicit logical language with connectives: and, or, not, if-then, therefore
 
                 with summary_cols[2]:
                     if sat_status == "unsat" and not is_contradiction:
-                        st.metric("Logic Satisfiable", "NO", delta="✓",
+                        st.metric("Logically Satisfiable", "NO", delta="✓",
                                   delta_color="normal")
                     elif sat_status == "sat":
-                        st.metric("Logic Satisfiable", "YES",
+                        st.metric("Logically Satisfiable", "YES",
                                   delta="✓", delta_color="normal")
                     else:
-                        st.metric("Logic Satisfiable", "N/A")
+                        st.metric("Logically Satisfiable", "N/A")
 
                 with summary_cols[3]:
                     if formal_validity is True:
