@@ -23,15 +23,6 @@ It extracts logical statements and validates them using both formal verification
 
 if GROQ_API_KEY == "your_api_key_here" or not GROQ_API_KEY:
     st.error("⚠️ Please configure your API Key first!")
-    st.info("""
-    **Setup Steps:**
-    1. Open the code file
-    2. Find line 8: `GROQ_API_KEY = "your_api_key_here"`
-    3. Replace with your actual API key
-    4. Save and restart
-
-    Get API key: https://console.groq.com/keys
-    """)
     st.stop()
 
 with st.sidebar:
@@ -55,11 +46,11 @@ with st.sidebar:
     **Neuro-Symbolic Architecture:**
     - **Neural**: LLM reasoning
     - **Symbolic**: Dual validation system
-    - **Methods**: SAT Solver + Heuristic
+    - **Methods**: Logical Verification and Heuristic Analysis
 
     **Validation Approaches:**
-    1. **Formal Verification**: Tests logical entailment using symbolic reasoning
-    2. **Heuristic Analysis**: Evaluates structure quality and completeness
+    1. **Logical Verification**: Uses SAT solver to test logical consequence using symbolic logical reasoning
+    2. **Heuristic Analysis**: Evaluates the quality and completeness of logical structure
     """)
 
 
@@ -507,7 +498,7 @@ Use explicit logical language with connectives: and, or, not, if-then, therefore
                                   delta="?", delta_color="off")
 
                 with summary_cols[1]:
-                    st.metric("Consistency Score", f"{heuristic_score}%", delta="✓" if heuristic_validity else "⚠",
+                    st.metric("Heuristic Score", f"{heuristic_score}%", delta="✓" if heuristic_validity else "⚠",
                               delta_color="normal" if heuristic_validity else "off")
 
                 with summary_cols[2]:
