@@ -2,7 +2,8 @@ import streamlit as st
 from groq import Groq
 from z3 import *
 import re
-from typing import List, Dict, Tuple
+import json
+from itertools import product
 
 GROQ_API_KEY = "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"
 
@@ -14,12 +15,8 @@ st.set_page_config(
 
 st.markdown("<h1 style='text-align: center;'>🧠 Neuro-Symbolic Logic Validator</h1>",
             unsafe_allow_html=True)
-st.markdown("<p style='text-align: center; color: #888;'><strong>Developed by Andy Ting Zhi Wei</strong></p>",
+st.markdown("<p style='text-align: center; color: #888;'><strong>👨‍💻 Developed by Andy Ting Zhi Wei</strong></p>",
             unsafe_allow_html=True)
-st.markdown("""
-This application validates the logical inference of AI-generated responses using propositional logic.
-It extracts logical statements and validates them using both logical verification and heuristic analysis.
-""")
 
 if GROQ_API_KEY == "your_api_key_here" or not GROQ_API_KEY:
     st.error("⚠️ Please configure your API Key first!")
@@ -30,27 +27,24 @@ with st.sidebar:
 
     model = st.selectbox(
         "Select Model",
-        ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "qwen/qwen3-32b"],
-        help="Choose the LLM model for reasoning"
+        [
+            "llama-3.3-70b-versatile",
+            "llama-3.1-8b-instant"
+        ],
+        help="Choose from active Groq models"
     )
 
     with st.expander("Advanced Settings"):
-        temperature = st.slider("Temperature", 0.0, 1.0, 0.3, 0.1,
-                                help="Lower = more focused, Higher = more creative")
-        max_tokens = st.slider("Max Tokens", 256, 2048, 1024, 128,
-                               help="Maximum length of AI response")
+        temperature = st.slider("Temperature", 0.0, 1.0, 0.2, 0.1)
+        max_tokens = st.slider("Max Tokens", 512, 4096, 1024, 128)
 
     st.markdown("---")
-    st.markdown("### About")
+    st.markdown("### Pipeline")
     st.markdown("""
-    **Neuro-Symbolic Architecture:**
-    - **Neural**: LLM reasoning
-    - **Symbolic**: Dual validation system
-    - **Methods**: Logical Verification and Heuristic Analysis
-
-    **Validation Approaches:**
-    1. **Logical Verification**: Uses SAT solver to test logical consequence using symbolic logical reasoning
-    2. **Heuristic Analysis**: Evaluates the quality and completeness of logical structure
+    **Stage 0:** Heuristic Analysis  
+    **Stage 1:** Neural Translation  
+    **Stage 2:** Truth Table  
+    **Stage 3:** Logic Verification
     """)
 
 
@@ -58,293 +52,300 @@ def get_groq_client():
     return Groq(api_key=GROQ_API_KEY)
 
 
-def extract_propositions(text: str) -> List[str]:
-    patterns = [
-        r'(?:therefore|thus|hence|so|consequently),?\s+',
-        r'\.\s+',
-        r';\s+',
-        r'\n+'
+def check_quantifier_logic(user_query):
+
+    query_lower = user_query.lower()
+
+    quantifier_patterns = [
+        r'\bfor all\b',
+        r'\bfor every\b',
+        r'\bthere exists\b',
+        r'\bexists\b',
+        r'\b∀\b',
+        r'\b∃\b',
+        r'\bforall\b',
+        r'\bsome\b.*\bsuch that\b'
     ]
 
-    combined_pattern = '|'.join(patterns)
-    sentences = re.split(combined_pattern, text)
+    for pattern in quantifier_patterns:
+        if re.search(pattern, query_lower):
+            return True
 
-    propositions = []
-    for s in sentences:
-        s = s.strip()
-        s = re.sub(r'^[\d\.\)\-•]+\s*', '', s)
-        if s and len(s) > 15 and not s.lower().startswith(('let', 'note', 'in other words')):
-            propositions.append(s)
+    if re.search(r'[a-z]\s*[<>=]\s*[-\d]', query_lower):
+        return True
 
-    return propositions
+    return False
 
 
-def parse_logic_structure(response: str) -> Dict:
-    response_lower = response.lower()
+def validate_logic_extraction(premises, conclusion):
 
-    structure = {
-        "premises": [],
-        "reasoning": [],
-        "conclusion": None,
-        "logical_operators": [],
-        "inference_pattern": None
-    }
+    invalid_phrases = [
+        'no premises',
+        'no premise',
+        'no conclusion',
+        'premise not provided',
+        'premises not provided',
+        'conclusion not provided',
+        'not specified',
+        'not given',
+        'not provided',
+        'none given',
+        'none provided',
+        'no statement',
+        'no logical',
+        'invalid',
+        'unclear',
+        'n/a',
+        'none'
+    ]
+
+    if not premises or len(premises) == 0:
+        return False, "No premises extracted"
+
+    for premise in premises:
+        premise_lower = premise.lower().strip()
+
+        if len(premise_lower) < 5:
+            return False, "Premises too short or empty"
+
+        if any(phrase in premise_lower for phrase in invalid_phrases):
+            return False, f"Invalid premise detected: '{premise}'"
+
+    if not conclusion or len(conclusion.strip()) < 5:
+        return False, "No conclusion extracted"
+
+    conclusion_lower = conclusion.lower().strip()
+
+    if any(phrase in conclusion_lower for phrase in invalid_phrases):
+        return False, f"Invalid conclusion detected: '{conclusion}'"
+
+    return True, "Valid"
+
+
+def heuristic_scoring(user_query):
+
+    query_lower = user_query.lower()
+    score = 0
+    max_score = 100
+
+    if 30 <= len(user_query) <= 500:
+        score += 10
 
     operators = {
-        "and": len(re.findall(r'\band\b', response_lower)),
-        "or": len(re.findall(r'\bor\b', response_lower)),
-        "not": len(re.findall(r'\bnot\b|\bno\b|\bfalse\b|\bnegation\b', response_lower)),
-        "implies": len(re.findall(r'\bif\b.*?\bthen\b|\bimplies\b|\bmeans that\b|\bleads to\b', response_lower)),
-        "therefore": len(re.findall(r'\btherefore\b|\bthus\b|\bhence\b|\bso\b|\bconsequently\b', response_lower))
+        "and": len(re.findall(r'\band\b', query_lower)),
+        "or": len(re.findall(r'\bor\b', query_lower)),
+        "not": len(re.findall(r'\bnot\b|\bno\b', query_lower)),
+        "if": len(re.findall(r'\bif\b', query_lower)),
+        "then": len(re.findall(r'\bthen\b', query_lower)),
+        "implies": len(re.findall(r'\bimplies\b|\bmeans\b', query_lower))
     }
 
-    structure["logical_operators"] = {
-        k: v for k, v in operators.items() if v > 0}
+    total_operators = sum(operators.values())
+    if total_operators >= 3:
+        score += 25
+    elif total_operators >= 1:
+        score += 15
 
-    if re.search(r'if.*then.*if.*then', response_lower):
-        structure["inference_pattern"] = "Hypothetical Syllogism"
-    elif re.search(r'all.*are.*and.*is.*therefore', response_lower):
-        structure["inference_pattern"] = "Categorical Syllogism"
-    elif re.search(r'if.*then.*is.*therefore', response_lower):
-        structure["inference_pattern"] = "Modus Ponens"
-    elif re.search(r'if.*then.*not.*therefore.*not', response_lower):
-        structure["inference_pattern"] = "Modus Tollens"
-    elif re.search(r'either.*or.*not.*therefore', response_lower):
-        structure["inference_pattern"] = "Disjunctive Syllogism"
+    question_markers = ["what", "can we conclude",
+                        "therefore", "thus", "?", "prove"]
+    has_markers = any(marker in query_lower for marker in question_markers)
+    if has_markers:
+        score += 20
 
-    conclusion_markers = [
-        r'therefore[,:]?\s+(.+?)(?:\.|$)',
-        r'thus[,:]?\s+(.+?)(?:\.|$)',
-        r'hence[,:]?\s+(.+?)(?:\.|$)',
-        r'so[,:]?\s+(.+?)(?:\.|$)',
-        r'we can conclude that\s+(.+?)(?:\.|$)',
-        r'it follows that\s+(.+?)(?:\.|$)',
-        r'this means\s+(.+?)(?:\.|$)',
-        r'conclusion:\s*(.+?)(?:\.|$)'
-    ]
+    sentences = re.split(r'[.;,]\s+|\n+', user_query)
+    valid_sentences = [s for s in sentences if len(s.strip()) > 15]
+    if len(valid_sentences) >= 2:
+        score += 20
+    elif len(valid_sentences) == 1:
+        score += 10
 
-    conclusion_found = False
-    for marker in conclusion_markers:
-        matches = re.findall(marker, response_lower, re.IGNORECASE)
-        if matches:
-            structure["conclusion"] = matches[-1].strip().rstrip('.')
-            conclusion_found = True
-            break
+    patterns = {
+        "Modus Ponens": r'if.*then.*(?:is|are)',
+        "Categorical": r'all.*(?:are|is)',
+        "Conditional": r'if.*then',
+        "Disjunctive": r'either.*or',
+        "Universal": r'every|all|any'
+    }
 
-    propositions = extract_propositions(response)
+    detected_patterns = []
+    for pattern_name, pattern_regex in patterns.items():
+        if re.search(pattern_regex, query_lower):
+            detected_patterns.append(pattern_name)
 
-    if conclusion_found and structure["conclusion"]:
-        conclusion_text = structure["conclusion"].lower()
-        structure["premises"] = [p for p in propositions
-                                 if conclusion_text not in p.lower()[:min(len(conclusion_text)+20, len(p))]]
-        for p in propositions:
-            if conclusion_text in p.lower():
-                structure["conclusion"] = p
-                break
+    if detected_patterns:
+        score += 25
     else:
-        if len(propositions) >= 2:
-            structure["conclusion"] = propositions[-1]
-            structure["premises"] = propositions[:-1]
-        elif len(propositions) == 1:
-            structure["conclusion"] = propositions[0]
+        score += 10
 
-    return structure
+    return {
+        "score": score,
+        "percentage": score,
+        "operators": operators,
+        "patterns": detected_patterns,
+        "quality": "Excellent" if score >= 80 else "Good" if score >= 60 else "Fair" if score >= 40 else "Poor"
+    }
 
 
-def formal_logical_validation(logic_structure: Dict) -> Tuple[bool, str, str, str, bool]:
+def extract_json_from_text(text):
+
+    json_block_pattern = r'```(?:json)?\s*(\{.*?\})\s*```'
+    match = re.search(json_block_pattern, text, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except:
+            pass
+
+    brace_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+    matches = re.findall(brace_pattern, text, re.DOTALL)
+
+    for match in reversed(sorted(matches, key=len)):
+        try:
+            return json.loads(match)
+        except:
+            continue
+
     try:
-        premises = logic_structure["premises"]
-        conclusion = logic_structure["conclusion"]
+        return json.loads(text)
+    except:
+        pass
 
-        if not premises or not conclusion:
-            return None, "unknown", "N/A", "Insufficient logical structure: need at least one premise and one conclusion", False
+    return None
 
-        premise_vars = []
-        for i, premise in enumerate(premises, 1):
-            var = Bool(f'P{i}')
-            premise_vars.append(var)
 
-        conclusion_var = Bool('C')
+def stage1_llm_translator(client, user_query, model, temperature, max_tokens):
 
-        all_premises = And(
-            *premise_vars) if len(premise_vars) > 1 else premise_vars[0]
+    system_prompt = """You are a formal logic expert and Z3 programmer.
 
-        premise_solver = Solver()
-        premise_solver.add(all_premises)
-        premise_check = premise_solver.check()
+**CRITICAL: Your response must be ONLY a valid JSON object. No other text before or after.**
 
-        if premise_check == unsat:
-            return None, "unsat", "premises_contradiction", """❌ **PREMISES CONTRADICTION ERROR**
+Analyze the question and output this EXACT structure:
 
-**Step 1: Premise Consistency Check**
+{
+  "premises": ["premise 1", "premise 2"],
+  "conclusion": "conclusion statement",
+  "z3_code": "from z3 import *\\n\\nP1 = Bool('P1')\\nP2 = Bool('P2')\\nC = Bool('C')\\n\\nconsistency_solver = Solver()\\nconsistency_solver.add(P1)\\nconsistency_solver.add(P2)\\nconsistency_status = consistency_solver.check()\\n\\nsat_solver = Solver()\\nsat_solver.add(P1)\\nsat_solver.add(P2)\\nsat_solver.add(C)\\nsat_status = sat_solver.check()\\n\\nvalidity_solver = Solver()\\nvalidity_solver.add(P1)\\nvalidity_solver.add(P2)\\nvalidity_solver.add(Not(C))\\nvalidity_status = validity_solver.check()\\n\\nresult = {'consistency': {'status': str(consistency_status), 'consistent': consistency_status == sat}, 'satisfiability': {'status': str(sat_status), 'satisfiable': sat_status == sat}, 'validity': {'status': str(validity_status), 'valid': validity_status == unsat}, 'model': str(validity_solver.model()) if validity_status == sat else None}"
+}
 
-The logic verifier detected that the premises themselves are contradictory (UNSATISFIABLE).
+**Z3 Code Template (adapt variable names to fit the logic):**
+- P1, P2, ... for premises
+- C for conclusion
+- Three solvers: consistency_solver, sat_solver, validity_solver
+- Final result dictionary with all three tests
 
-**Result:** (P₁ ∧ P₂ ∧ ... ∧ Pₙ) is UNSATISFIABLE
+**IMPORTANT:**
+- Escape all backslashes as \\\\n for newlines
+- Use double quotes for all strings
+- Return ONLY the JSON object, nothing else"""
 
-**Interpretation:** The premises cannot all be true simultaneously. This is a logical contradiction.
+    try:
+        response = client.chat.completions.create(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": f"Analyze this logical question and return ONLY valid JSON:\n\n{user_query}"}
+            ],
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
 
-**Conclusion:** The inference is **Vacuously Valid** - from a contradiction, anything can be derived (principle of explosion), but the reasoning is meaningless because the premises are inconsistent.
+        return response.choices[0].message.content
+    except Exception as e:
+        raise Exception(f"LLM API Error: {str(e)}")
 
-**Recommendation:** Review and correct the premises before evaluating the inference.""", True
 
-        solver = Solver()
-        conclusion_false = Not(conclusion_var)
+def stage2_z3_reasoner(z3_code):
+    try:
+        exec_globals = {}
+        exec_locals = {}
 
-        solver.add(all_premises)
-        solver.add(conclusion_false)
+        exec(z3_code, exec_globals, exec_locals)
 
-        result = solver.check()
-        result_str = str(result)
-
-        if result == unsat:
-            validity = True
-            sat_status = "unsat"
-            explanation = """✅ **LOGICALLY VALID INFERENCE**
-
-**Step 1: Premise Consistency Check**
-
-Premises are consistent (satisfiable) ✓
-
-**Step 2: Validity Check**
-
-The logic verifier confirmed that (P₁ ∧ P₂ ∧ ... ∧ Pₙ ∧ ¬C) is UNSATISFIABLE
-
-**Interpretation:** It is impossible for all premises to be true while the conclusion is false. The conclusion necessarily follows from the premises through logical entailment.
-
-**Logical Proof:** Given the premises are true, the conclusion MUST be true."""
-
-        elif result == sat:
-            model = solver.model()
-            validity = False
-            sat_status = "sat"
-
-            counterexample_lines = []
-            for i, var in enumerate(premise_vars, 1):
-                value = model.evaluate(var, model_completion=True)
-                counterexample_lines.append(f"P{i} = {value}")
-            counterexample_lines.append(
-                f"C = {model.evaluate(conclusion_var, model_completion=True)}")
-
-            counterexample_str = ", ".join(counterexample_lines)
-
-            explanation = f"""❌ **LOGICALLY INVALID INFERENCE**
-
-**Step 1: Premise Consistency Check**
-
-Premises are consistent (satisfiable) ✓
-
-**Step 2: Validity Check**
-
-The logic verifier found that (P₁ ∧ P₂ ∧ ... ∧ Pₙ ∧ ¬C) is SATISFIABLE
-
-**Counterexample:** {counterexample_str}
-
-**Interpretation:** There exists a scenario where all premises are true but the conclusion is false. This indicates a logical fallacy - the conclusion does not necessarily follow from the premises.
-
-**Recommendation:** The inference is invalid in propositional logic. Additional premises may be needed, or the reasoning contains a flaw."""
-
+        if 'result' in exec_locals:
+            return exec_locals['result'], None
         else:
-            validity = None
-            sat_status = "unknown"
-            explanation = """⚠️ **VALIDATION UNDETERMINED**
-
-**Step 1: Premise Consistency Check**
-
-Premises appear consistent ✓
-
-**Step 2: Validity Check**
-
-The logic verifier returned UNKNOWN status
-
-**Possible Reasons:**
-- Very complex logical structure
-- Solver timeout
-- Non-standard logical patterns
-
-**Conclusion:** The reasoning may still be valid but couldn't be verified formally."""
-
-        return validity, sat_status, result_str, explanation, False
+            return None, "Z3 code did not produce 'result' variable"
 
     except Exception as e:
-        return None, "error", "error", f"Logic validation error: {str(e)}", False
+        return None, f"Z3 execution error: {str(e)}"
 
 
-def heuristic_validation(logic_structure: Dict) -> Tuple[bool, str, int]:
-    score = 0
-    max_score = 0
-    issues = []
+def generate_truth_table_latex(n_premises, z3_result):
 
-    max_score += 30
-    if logic_structure["premises"] and logic_structure["conclusion"]:
-        score += 30
+    if n_premises > 4:
+        return r"\text{Truth table too large to display (more than 4 premises)}"
+
+    n_total_vars = n_premises + 1
+    all_combinations = list(product([True, False], repeat=n_total_vars))
+
+    show_conjunction = n_premises > 1
+
+    latex = r"\begin{array}{|"
+    latex += "c|" * n_premises
+    latex += "c|"
+    if show_conjunction:
+        latex += "c|"
+    latex += "c|"
+    latex += "}\n"
+    latex += r"\hline" + "\n"
+
+    header_parts = [f"P_{{{i+1}}}" for i in range(n_premises)]
+    header_parts.append("C")
+
+    if show_conjunction:
+        premise_conj = r" \land ".join(
+            [f"P_{{{i+1}}}" for i in range(n_premises)])
+        header_parts.append(premise_conj)
+        implication_formula = f"{premise_conj} \\rightarrow C"
     else:
-        issues.append("Missing clear premises or conclusion")
-        return False, "Incomplete logical structure: " + "; ".join(issues), 0
+        implication_formula = f"P_1 \\rightarrow C"
 
-    max_score += 20
-    if logic_structure["logical_operators"]:
-        score += min(20, len(logic_structure["logical_operators"]) * 5)
-    else:
-        issues.append("Missing logical connectives")
+    header_parts.append(implication_formula)
 
-    max_score += 20
-    if logic_structure["logical_operators"].get("therefore", 0) > 0:
-        score += 20
-    else:
-        issues.append("Conclusion not explicitly marked")
+    latex += " & ".join(header_parts) + r" \\" + "\n"
+    latex += r"\hline" + "\n"
 
-    max_score += 15
-    num_premises = len(logic_structure["premises"])
-    if 1 <= num_premises <= 5:
-        score += 15
-    elif num_premises > 5:
-        score += 10
-        issues.append("Too many premises")
-    else:
-        issues.append("Insufficient premises")
+    for combo in all_combinations:
+        premise_vals = combo[:n_premises]
+        c_val = combo[n_premises]
 
-    max_score += 15
-    if logic_structure["inference_pattern"]:
-        score += 15
+        row_parts = []
 
-    percentage = (score / max_score) * 100
+        for val in premise_vals:
+            row_parts.append("T" if val else "F")
 
-    if percentage >= 70:
-        validity = True
-        explanation = f"""The logical reasoning structure is complete and well-formed (Score: {percentage:.0f}%).
+        row_parts.append("T" if c_val else "F")
 
-**Details:**
-- Premises: {len(logic_structure["premises"])}
-- Logical connectives: {sum(logic_structure["logical_operators"].values())}
-- Pattern: {logic_structure["inference_pattern"] or "General reasoning"}
+        premises_conj_val = all(premise_vals)
+        if show_conjunction:
+            row_parts.append("T" if premises_conj_val else "F")
 
-The reasoning process is clear and properly structured."""
-    else:
-        validity = False
-        explanation = f"""The logical structure may be incomplete or unclear (Score: {percentage:.0f}%).
+        implication_val = (not premises_conj_val) or c_val
 
-**Issues:** {", ".join(issues)}
+        row_parts.append("T" if implication_val else "F")
 
-**Suggestions:** Ensure premises are explicit, use 'therefore' to mark conclusions, and include logical connectives."""
+        latex += " & ".join(row_parts) + r" \\" + "\n"
 
-    return validity, explanation, int(percentage)
+    latex += r"\hline" + "\n"
+    latex += r"\end{array}"
+
+    return latex
 
 
 def main():
     st.header("📝 Input")
 
     user_query = st.text_area(
-        "Enter your logical statement or question:",
-        placeholder="Example: If all mathematicians are genius, and Dr. Maharani is a mathematician, what can we conclude about Dr. Maharani?",
+        "Enter your logical reasoning question:",
+        placeholder="Example: If all humans are mortal, and Socrates is a human, what can we conclude about Socrates?",
         height=120,
-        help="Enter a logical reasoning question with clear premises and a conclusion"
+        help="Enter a logical reasoning question with clear premises"
     )
 
     col1, col2 = st.columns([3, 1])
     with col1:
         analyze_button = st.button(
-            "🔍 Analyze Logic", type="primary", use_container_width=True)
+            "🔍 Analyze with Neuro-Symbolic Logic Validator", type="primary", use_container_width=True)
     with col2:
         if st.button("🔄 Clear", use_container_width=True):
             st.rerun()
@@ -354,178 +355,204 @@ def main():
             st.error("Please enter a query")
             return
 
-        with st.spinner("🤖 Generating AI response..."):
+        if check_quantifier_logic(user_query):
+            st.error("⚠️ **Quantifier Logic Not Supported**")
+            st.warning("""
+This system is designed for **Propositional Logic** only.
+
+**Not Supported:**
+- Quantifiers: ∀ (for all), ∃ (there exists)
+- Mathematical inequalities: x < 0, x > 5
+- Variables with domains: "for all x", "there exists y"
+
+**Supported:**
+- Propositional statements: "All humans are mortal", "Socrates is human"
+- Logical connectives: AND, OR, NOT, IF...THEN
+- Categorical reasoning: "All A are B"
+
+**Example of supported query:**
+"If all humans are mortal, and Socrates is a human, what can we conclude about Socrates?"
+            """)
+            return
+
+        client = get_groq_client()
+
+        with st.spinner("📊 Stage 0: Analyzing input quality..."):
+            heuristic_result = heuristic_scoring(user_query)
+
+            st.subheader("📊 Stage 0: Heuristic Input Analysis")
+
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Input Quality Score", f"{heuristic_result['percentage']}%",
+                          delta=heuristic_result['quality'])
+            with col2:
+                st.metric("Logical Operators", sum(
+                    heuristic_result['operators'].values()))
+            with col3:
+                st.metric("Detected Patterns", len(
+                    heuristic_result['patterns']))
+
+            if heuristic_result['patterns']:
+                st.info(
+                    f"🎓 **Patterns Detected:** {', '.join(heuristic_result['patterns'])}")
+
+        with st.spinner("🧠 Stage 1: LLM translating to formal logic..."):
             try:
-                client = get_groq_client()
+                llm_output = stage1_llm_translator(
+                    client, user_query, model, temperature, max_tokens)
 
-                chat_completion = client.chat.completions.create(
-                    messages=[
-                        {
-                            "role": "system",
-                            "content": """You are a logical reasoning expert. Provide clear, step-by-step logical reasoning.
+                llm_data = extract_json_from_text(llm_output)
 
-Structure your response as:
-1. State the premises explicitly (e.g., "Premise 1: ...", "Premise 2: ...")
-2. Identify the logical rule being applied
-3. State the conclusion clearly using "Therefore" or "Thus"
+                if llm_data is None:
+                    st.error("❌ Failed to parse LLM response as JSON")
+                    with st.expander("🐛 Debug: LLM Raw Output"):
+                        st.code(llm_output, language="text")
+                    return
 
-Use explicit logical language with connectives: and, or, not, if-then, therefore."""
-                        },
-                        {
-                            "role": "user",
-                            "content": user_query
-                        }
-                    ],
-                    model=model,
-                    temperature=temperature,
-                    max_tokens=max_tokens
+                if 'premises' not in llm_data or 'conclusion' not in llm_data or 'z3_code' not in llm_data:
+                    st.error("❌ LLM response missing required fields")
+                    with st.expander("🐛 Debug: Parsed JSON"):
+                        st.json(llm_data)
+                    return
+
+                is_valid, validation_msg = validate_logic_extraction(
+                    llm_data['premises'],
+                    llm_data['conclusion']
                 )
 
-                ai_response = chat_completion.choices[0].message.content
+                if not is_valid:
+                    st.error("❌ **No Valid Logic Statements Found**")
+                    st.warning("""
+**Please enter a proper logical reasoning question.**
 
-                st.header("🤖 AI Response")
-                with st.container():
-                    st.markdown(f"**Model:** {model}")
-                    st.info(ai_response)
+Your input must contain:
+- **Premises**: Clear logical statements or facts
+- **Conclusion**: What you want to prove or determine
 
-                st.header("🔬 Logic Analysis")
-                logic_structure = parse_logic_structure(ai_response)
+**Examples of valid inputs:**
 
-                st.subheader("📋 Extracted Premises")
-                if logic_structure["premises"]:
-                    for i, premise in enumerate(logic_structure["premises"], 1):
-                        st.markdown(f"**P{i}:** {premise}")
-                else:
-                    st.warning("No premises extracted")
+✅ **Good:**
+- "If all humans are mortal, and Socrates is a human, what can we conclude about Socrates?"
+- "All birds can fly. Penguins are birds. Can penguins fly?"
+- "If it rains, the ground is wet. It is raining. Is the ground wet?"
 
-                st.subheader("🎯 Conclusion")
-                if logic_structure["conclusion"]:
-                    st.markdown(f"**C:** {logic_structure['conclusion']}")
-                else:
-                    st.warning("No conclusion extracted")
+❌ **Bad:**
+- Empty or very short input
+- Random text without logical structure (e.g., "haha", "hello")
+- Questions without premises or conclusions
 
-                premises = logic_structure["premises"]
-                conclusion = logic_structure["conclusion"]
+**Try again with a clear logical reasoning question!**
+                    """)
 
-                formal_logic = []
-                for i, premise in enumerate(premises, 1):
-                    formal_logic.append(f"P{i}: {premise}")
-                if conclusion:
-                    formal_logic.append(f"C: {conclusion}")
-                formal_repr = "\n".join(formal_logic)
+                    with st.expander("🔍 What was extracted from your input"):
+                        st.markdown(f"**Premises:** {llm_data['premises']}")
+                        st.markdown(
+                            f"**Conclusion:** {llm_data['conclusion']}")
+                        st.caption(f"Validation error: {validation_msg}")
 
-                st.subheader("📐 Propositional Logic")
-                st.code(formal_repr, language="text")
+                    return
 
-                if len(premises) > 1:
-                    premise_formula = " ∧ ".join(
-                        [f"P{i+1}" for i in range(len(premises))])
-                    formula = f"({premise_formula}) → C"
-                elif len(premises) == 1:
-                    formula = "P1 → C"
-                else:
-                    formula = "No valid formula"
+                st.success("✅ Stage 1 Complete: Logic translated")
 
-                st.subheader("🧮 Logical Formula")
-                if formula != "No valid formula":
-                    st.latex(formula.replace('∧', r'\land').replace(
-                        '→', r'\rightarrow').replace('¬', r'\lnot'))
-
-                    if logic_structure["inference_pattern"]:
-                        st.info(
-                            f"🎓 **Detected Pattern:** {logic_structure['inference_pattern']}")
-                    else:
-                        st.info(f"🎓 **Detected Pattern:** General Reasoning")
-                else:
-                    st.warning("Unable to construct formula")
-
-                st.header("⚖️ Dual Validation Results")
-
-                with st.spinner("🔍 Running validations..."):
-                    formal_validity, sat_status, result_str, formal_explanation, is_contradiction = formal_logical_validation(
-                        logic_structure)
-                    heuristic_validity, heuristic_explanation, heuristic_score = heuristic_validation(
-                        logic_structure)
+                st.subheader("🔤 Stage 1: Neural Translation")
 
                 col1, col2 = st.columns(2)
-
                 with col1:
-                    st.subheader("🔷 Logical Verification")
-
-                    if is_contradiction:
-                        st.error(f"❌ PREMISES CONTRADICTION (Vacuously Valid)")
-                        st.info(
-                            f"**Satisfiability Check:** PREMISES UNSATISFIABLE")
-                    elif sat_status == "unsat":
-                        st.success(f"✅ LOGICALLY VALID")
-                        st.info(f"**Satisfiability Check:** UNSATISFIABLE")
-                    elif sat_status == "sat":
-                        st.error(f"❌ LOGICALLY INVALID")
-                        st.info(f"**Satisfiability Check:** SATISFIABLE")
-                    elif sat_status == "unknown":
-                        st.warning(f"⚠️ UNDETERMINED")
-                        st.info(f"**Satisfiability Check:** UNKNOWN")
-                    else:
-                        st.error(f"❌ ERROR")
-                        st.info(f"**Satisfiability Check:** ERROR")
-
-                    st.markdown(formal_explanation)
+                    st.markdown("**📋 Extracted Premises:**")
+                    for i, premise in enumerate(llm_data['premises'], 1):
+                        st.markdown(f"**P{i}:** {premise}")
 
                 with col2:
-                    st.subheader("🔶 Heuristic Analysis")
-
-                    if heuristic_validity is True:
-                        st.success(f"✅ WELL-STRUCTURED ({heuristic_score}%)")
-                    elif heuristic_validity is False:
-                        st.warning(f"⚠️ INCOMPLETE ({heuristic_score}%)")
-                    else:
-                        st.info(f"ℹ️ UNDETERMINED ({heuristic_score}%)")
-
-                    st.markdown(heuristic_explanation)
-
-                st.header("📊 Analysis Summary")
-                summary_cols = st.columns(4)
-
-                with summary_cols[0]:
-                    if is_contradiction:
-                        st.metric("Logically Consistent", "NO", delta="⚠",
-                                  delta_color="inverse")
-                    elif sat_status in ["unsat", "sat"]:
-                        st.metric("Logically Consistent", "YES",
-                                  delta="✓", delta_color="normal")
-                    else:
-                        st.metric("Logically Consistent", "N/A",
-                                  delta="?", delta_color="off")
-
-                with summary_cols[1]:
-                    st.metric("Heuristic Score", f"{heuristic_score}%", delta="✓" if heuristic_validity else "⚠",
-                              delta_color="normal" if heuristic_validity else "off")
-
-                with summary_cols[2]:
-                    if sat_status == "unsat" and not is_contradiction:
-                        st.metric("Logically Satisfiable", "NO", delta="✓",
-                                  delta_color="normal")
-                    elif sat_status == "sat":
-                        st.metric("Logically Satisfiable", "YES",
-                                  delta="✓", delta_color="normal")
-                    else:
-                        st.metric("Logically Satisfiable", "N/A")
-
-                with summary_cols[3]:
-                    if formal_validity is True:
-                        st.metric("Logic Validity", "VALID",
-                                  delta="✓", delta_color="normal")
-                    elif formal_validity is False:
-                        st.metric("Logic Validity", "INVALID",
-                                  delta="✗", delta_color="inverse")
-                    else:
-                        st.metric("Logic Validity", "UNKNOWN",
-                                  delta="?", delta_color="off")
+                    st.markdown("**🎯 Conclusion:**")
+                    st.markdown(f"**C:** {llm_data['conclusion']}")
 
             except Exception as e:
-                st.error(f"❌ Error occurred: {str(e)}")
-                with st.expander("🐛 Debug Information"):
-                    st.exception(e)
+                st.error(f"❌ Stage 1 Error: {str(e)}")
+                with st.expander("🐛 Debug Info"):
+                    st.code(llm_output if 'llm_output' in locals()
+                            else "No output captured", language="text")
+                return
+
+        with st.spinner("⚡ Executing Z3 verification..."):
+            try:
+                z3_result, z3_error = stage2_z3_reasoner(llm_data['z3_code'])
+
+                if z3_error:
+                    st.error(f"❌ Z3 Error: {z3_error}")
+                    with st.expander("🐛 Debug: Z3 Code"):
+                        st.code(llm_data['z3_code'], language="python")
+                    return
+
+            except Exception as e:
+                st.error(f"❌ Z3 Error: {str(e)}")
+                return
+
+        st.subheader("📊 Stage 2: Truth Table")
+
+        if len(llm_data['premises']) > 4:
+            st.warning(
+                "⚠️ Truth table too large to display (more than 4 premises)")
+        else:
+            truth_table_latex = generate_truth_table_latex(
+                len(llm_data['premises']), z3_result
+            )
+
+            st.latex(truth_table_latex)
+
+        st.subheader("⚡ Stage 3: Logical Reasoning")
+
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.markdown("### 🔷 Consistency")
+            if z3_result.get('consistency', {}).get('consistent'):
+                st.success("✅ CONSISTENT")
+                st.caption("Premises do not contradict")
+            else:
+                st.error("❌ INCONSISTENT")
+                st.caption("Premises are contradictory")
+
+        with col2:
+            st.markdown("### 🔶 Satisfiability")
+            if z3_result.get('satisfiability', {}).get('satisfiable'):
+                st.success("✅ SATISFIABLE")
+                st.caption("Premises & conclusion can coexist")
+            else:
+                st.warning("❌ UNSATISFIABLE")
+                st.caption("Premises & conclusion conflict")
+
+        with col3:
+            st.markdown("### 🟣 Validity")
+            if z3_result.get('validity', {}).get('valid'):
+                st.success("✅ VALID")
+                st.caption("Conclusion follows necessarily")
+            else:
+                st.warning("❌ INVALID")
+                st.caption("Conclusion not entailed")
+
+        st.header("📊 Analysis Summary")
+
+        summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+
+        with summary_col1:
+            st.metric("Input Quality", f"{heuristic_result['percentage']}%",
+                      delta=heuristic_result['quality'])
+
+        with summary_col2:
+            consistency_val = "✅" if z3_result.get(
+                'consistency', {}).get('consistent') else "❌"
+            st.metric("Consistent", consistency_val)
+
+        with summary_col3:
+            sat_val = "✅" if z3_result.get(
+                'satisfiability', {}).get('satisfiable') else "❌"
+            st.metric("Satisfiable", sat_val)
+
+        with summary_col4:
+            validity_val = "✅" if z3_result.get(
+                'validity', {}).get('valid') else "❌"
+            st.metric("Valid", validity_val)
 
 
 if __name__ == "__main__":
