@@ -488,13 +488,13 @@ Use explicit logical language with connectives: and, or, not, if-then, therefore
 
                 with summary_cols[0]:
                     if is_contradiction:
-                        st.metric("Consistency", "NO", delta="⚠",
+                        st.metric("Logic Consistency", "NO", delta="⚠",
                                   delta_color="inverse")
                     elif sat_status in ["unsat", "sat"]:
-                        st.metric("Consistency", "YES",
+                        st.metric("Logic Consistency", "YES",
                                   delta="✓", delta_color="normal")
                     else:
-                        st.metric("Consistency", "N/A",
+                        st.metric("Logic Consistency", "N/A",
                                   delta="?", delta_color="off")
 
                 with summary_cols[1]:
@@ -503,23 +503,23 @@ Use explicit logical language with connectives: and, or, not, if-then, therefore
 
                 with summary_cols[2]:
                     if sat_status == "unsat" and not is_contradiction:
-                        st.metric("Satisfiable", "NO", delta="✓",
+                        st.metric("Logic Satisfiable", "NO", delta="✓",
                                   delta_color="normal")
                     elif sat_status == "sat":
-                        st.metric("Satisfiable", "YES",
+                        st.metric("Logic Satisfiable", "YES",
                                   delta="✓", delta_color="normal")
                     else:
-                        st.metric("Satisfiable", "N/A")
+                        st.metric("Logic Satisfiable", "N/A")
 
                 with summary_cols[3]:
                     if formal_validity is True:
-                        st.metric("Formal Validity", "VALID",
+                        st.metric("Logic Validity", "VALID",
                                   delta="✓", delta_color="normal")
                     elif formal_validity is False:
-                        st.metric("Formal Validity", "INVALID",
+                        st.metric("Logic Validity", "INVALID",
                                   delta="✗", delta_color="inverse")
                     else:
-                        st.metric("Formal Validity", "UNKNOWN",
+                        st.metric("Logic Validity", "UNKNOWN",
                                   delta="?", delta_color="off")
 
             except Exception as e:
