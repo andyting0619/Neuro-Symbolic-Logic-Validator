@@ -5,7 +5,7 @@ import re
 import json
 from itertools import product
 
-GROQ_API_KEY = "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"
+GROQ_API_KEY = "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"
 
 st.set_page_config(
     page_title="Neuro-Symbolic Logic Validator",
