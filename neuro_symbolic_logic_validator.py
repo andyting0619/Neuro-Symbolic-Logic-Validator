@@ -5,9 +5,9 @@ import re
 import json
 from itertools import product
 
-KEY_1 = "gsk_n3o21Q35nPXLC0WRpbN"
-KEY_2 = "ZWGdyb3FYVMZNI"
-KEY_3 = "kpwrsG71z8zPhkCekyE"
+KEY_1 = "gsk_vD7EHyaBqg3bP"
+KEY_2 = "LeQfVaXWGdyb3F"
+KEY_3 = "YRFTnIHfwoSnh5U7wdLWm6QyN"
 
 GROQ_API_KEY = KEY_1 + KEY_2 + KEY_3
 
